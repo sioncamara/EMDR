@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"const p = require\\(''/Users/sion/Documents/Formulation/code/EMDR-APP/node_modules/next/package.json''\\); console.log\\(p.version\\)\")",
+      "Bash(find /Users/sion/Documents/Formulation/code/EMDR-APP/node_modules/next/dist/client/ -type f -name *.js -o -name *.ts)",
+      "Bash(find /Users/sion/Documents/Formulation/code/EMDR-APP/node_modules/next/dist/docs/ -name *viewport* -o -name *mobile* -o -name *ios*)",
+      "Bash(find /Users/sion/Documents/Formulation/code/EMDR-APP/node_modules/next/dist/client/ -name *.js -type f)"
+    ]
+  }
+}

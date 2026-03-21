@@ -76,16 +76,16 @@ export default function AdjustmentsPanel({
 
       {/* Sheet */}
       <div className="relative bg-gray-100 rounded-t-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
-        {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-1">
+        {/* Drag handle — tap to close */}
+        <div className="flex justify-center pt-3 pb-1 cursor-pointer" onClick={onClose}>
           <div className="w-10 h-1 rounded-full bg-gray-300" />
         </div>
 
         {/* Header */}
-        <div className="flex items-center px-5 pt-3 pb-4">
+        <div className="relative flex items-center px-5 pt-3 pb-4">
           <button
             onClick={onClose}
-            className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm shrink-0"
+            className="relative z-10 w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm shrink-0"
           >
             <svg
               viewBox="0 0 24 24"
@@ -99,7 +99,7 @@ export default function AdjustmentsPanel({
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
-          <h2 className="flex-1 text-center text-base font-semibold -ml-9">
+          <h2 className="absolute inset-x-0 text-center text-base font-semibold pointer-events-none">
             Adjustments
           </h2>
         </div>

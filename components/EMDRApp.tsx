@@ -309,6 +309,14 @@ export default function EMDRApp() {
       stopAnimation();
       setIsPlaying(false);
     } else {
+      // iOS Safari requires a source node to be started within a user gesture to unlock audio.
+      // Play a silent buffer immediately so the AudioContext is fully unlocked before rAF fires.
+      const ctx = getAudioCtx();
+      const buf = ctx.createBuffer(1, 1, ctx.sampleRate);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
       setIsPlaying(true);
       startAnimation();
     }
@@ -350,13 +358,13 @@ export default function EMDRApp() {
   const activeRepeat = repeatCounts[activeRepeatIdx];
 
   return (
-    <div className="flex flex-col h-full bg-white select-none overflow-hidden">
+    <div className="flex flex-col h-full bg-white overflow-hidden">
       {/* ── Ball arena ── */}
       <div
         ref={containerRef}
         className="flex-1 relative"
         onClick={togglePlay}
-        style={{ cursor: "pointer" }}
+        style={{ cursor: "pointer", touchAction: "manipulation" }}
       >
         <div
           ref={ballRef}
@@ -396,6 +404,7 @@ export default function EMDRApp() {
         className={`border-t border-gray-100 bg-white transition-opacity duration-500 ${
           isPlaying ? "opacity-20 pointer-events-none" : "opacity-100"
         }`}
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div className="flex items-end justify-between px-4 py-3">
           {/* Speed pill — tap to cycle active slot */}
