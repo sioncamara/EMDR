@@ -12,7 +12,24 @@ const DEFAULT_REPEAT_COUNTS: RepeatCounts = [35, 70];
 
 // ─── Audio synthesis ────────────────────────────────────────────────────────
 
+// Short clock-like tick — the metronome icon sound
 function playBeep(ctx: AudioContext) {
+  const t = ctx.currentTime;
+  // Very short high-frequency impulse, like a clock or mechanical metronome tick
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "sine";
+  osc.frequency.value = 1200;
+  gain.gain.setValueAtTime(0.9, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.012);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(t);
+  osc.stop(t + 0.015);
+}
+
+// Sustained 440 Hz tone — the wave icon sound
+function playSnap(ctx: AudioContext) {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.connect(gain);
@@ -24,28 +41,6 @@ function playBeep(ctx: AudioContext) {
   gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
   osc.start(t);
   osc.stop(t + 0.12);
-}
-
-function playSnap(ctx: AudioContext) {
-  const sr = ctx.sampleRate;
-  const len = Math.floor(sr * 0.06);
-  const buf = ctx.createBuffer(1, len, sr);
-  const data = buf.getChannelData(0);
-  for (let i = 0; i < len; i++) {
-    const t = i / sr;
-    data[i] = (Math.random() * 2 - 1) * Math.exp(-t / 0.003);
-  }
-  const src = ctx.createBufferSource();
-  src.buffer = buf;
-  const hp = ctx.createBiquadFilter();
-  hp.type = "highpass";
-  hp.frequency.value = 900;
-  const gain = ctx.createGain();
-  gain.gain.value = 3;
-  src.connect(hp);
-  hp.connect(gain);
-  gain.connect(ctx.destination);
-  src.start();
 }
 
 // ─── SVG Icons ───────────────────────────────────────────────────────────────
@@ -78,34 +73,44 @@ function IconMute({ active }: { active: boolean }) {
   );
 }
 
+// Metronome body with swung pendulum — represents the "tick" beat
 function IconBeep({ active }: { active: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
-      fill="currentColor"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
       className={`w-5 h-5 ${active ? "text-gray-900" : "text-gray-400"}`}
     >
-      <path d="M9 18V5l12-2v13" />
-      <circle cx="6" cy="18" r="3" />
-      <circle cx="18" cy="16" r="3" />
+      {/* Trapezoid body */}
+      <path d="M5 21h14L15 4H9L5 21z" />
+      {/* Pendulum swung to the right */}
+      <line x1="12" y1="21" x2="17.5" y2="8" />
+      {/* Weight on pendulum */}
+      <circle cx="17.5" cy="8" r="1.5" fill="currentColor" stroke="none" />
+      {/* Tempo mark on body */}
+      <line x1="9" y1="14" x2="14" y2="14" strokeWidth="1.4" />
     </svg>
   );
 }
 
+// ECG / heartbeat waveform — represents the tone beat
 function IconSnap({ active }: { active: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
       className={`w-5 h-5 ${active ? "text-gray-900" : "text-gray-400"}`}
     >
-      <polygon points="12,2 22,20 2,20" />
-      <line x1="12" y1="20" x2="12" y2="10" />
-      <line x1="12" y1="13" x2="16" y2="11" />
+      {/* flat – P bump – QRS spike – T wave – flat */}
+      <polyline points="2,12 6,12 7,10 8,12 10,12 11,3 12,21 13,12 15,9 17,12 22,12" />
     </svg>
   );
 }
@@ -199,6 +204,17 @@ export default function EMDRApp() {
     }
   }
 
+  function previewSound(mode: SoundMode) {
+    if (mode === "muted") return;
+    try {
+      const ctx = getAudioCtx();
+      if (mode === "beep") playBeep(ctx);
+      else playSnap(ctx);
+    } catch {
+      /* AudioContext not available */
+    }
+  }
+
   // ─── Ball rendering ──────────────────────────────────────────────────────
 
   function renderBall(phase: number) {
@@ -218,7 +234,8 @@ export default function EMDRApp() {
   // ─── Animation loop ──────────────────────────────────────────────────────
 
   const animateRef = useRef<((ts: number) => void) | undefined>(undefined);
-  animateRef.current = (timestamp: number) => {
+  useEffect(() => {
+    animateRef.current = (timestamp: number) => {
     if (!isPlayingRef.current) return;
     if (lastTsRef.current === null) lastTsRef.current = timestamp;
     const dt = Math.min((timestamp - lastTsRef.current) / 1000, 0.1);
@@ -260,6 +277,7 @@ export default function EMDRApp() {
     renderBall(nextPhase);
     animFrameRef.current = requestAnimationFrame((ts) => animateRef.current!(ts));
   };
+  });
 
   // ─── Play / stop ─────────────────────────────────────────────────────────
 
@@ -301,7 +319,6 @@ export default function EMDRApp() {
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Settings handlers ────────────────────────────────────────────────────
@@ -433,11 +450,11 @@ export default function EMDRApp() {
               <button className="p-0.5" onClick={() => setSoundMode("muted")}>
                 <IconMute active={soundMode === "muted"} />
               </button>
-              <button className="p-0.5" onClick={() => setSoundMode("beep")}>
-                <IconBeep active={soundMode === "beep"} />
-              </button>
-              <button className="p-0.5" onClick={() => setSoundMode("snap")}>
+              <button className="p-0.5" onClick={() => { setSoundMode("snap"); previewSound("snap"); }}>
                 <IconSnap active={soundMode === "snap"} />
+              </button>
+              <button className="p-0.5" onClick={() => { setSoundMode("beep"); previewSound("beep"); }}>
+                <IconBeep active={soundMode === "beep"} />
               </button>
             </div>
             <span className="text-[11px] text-gray-400">Sound</span>
