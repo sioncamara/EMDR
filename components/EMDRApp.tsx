@@ -1,0 +1,473 @@
+"use client";
+
+import { useState, useRef, useEffect } from "react";
+import AdjustmentsPanel from "./AdjustmentsPanel";
+
+export type SoundMode = "muted" | "beep" | "snap";
+export type Speeds = [number, number, number];
+export type RepeatCounts = [number | null, number | null];
+
+const DEFAULT_SPEEDS: Speeds = [0.5, 1.5, 0.5];
+const DEFAULT_REPEAT_COUNTS: RepeatCounts = [35, 70];
+
+// ─── Audio synthesis ────────────────────────────────────────────────────────
+
+function playBeep(ctx: AudioContext) {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.type = "sine";
+  osc.frequency.value = 440; // A4
+  const t = ctx.currentTime;
+  gain.gain.setValueAtTime(0.25, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+  osc.start(t);
+  osc.stop(t + 0.12);
+}
+
+function playSnap(ctx: AudioContext) {
+  const sr = ctx.sampleRate;
+  const len = Math.floor(sr * 0.06);
+  const buf = ctx.createBuffer(1, len, sr);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) {
+    const t = i / sr;
+    data[i] = (Math.random() * 2 - 1) * Math.exp(-t / 0.003);
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const hp = ctx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.value = 900;
+  const gain = ctx.createGain();
+  gain.gain.value = 3;
+  src.connect(hp);
+  hp.connect(gain);
+  gain.connect(ctx.destination);
+  src.start();
+}
+
+// ─── SVG Icons ───────────────────────────────────────────────────────────────
+
+function IconPlay() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 ml-1">
+      <polygon points="5,3 19,12 5,21" />
+    </svg>
+  );
+}
+
+function IconMute({ active }: { active: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`w-5 h-5 ${active ? "text-gray-900" : "text-gray-400"}`}
+    >
+      <line x1="1" y1="1" x2="23" y2="23" />
+      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+      <line x1="12" y1="19" x2="12" y2="23" />
+      <line x1="8" y1="23" x2="16" y2="23" />
+    </svg>
+  );
+}
+
+function IconBeep({ active }: { active: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={`w-5 h-5 ${active ? "text-gray-900" : "text-gray-400"}`}
+    >
+      <path d="M9 18V5l12-2v13" />
+      <circle cx="6" cy="18" r="3" />
+      <circle cx="18" cy="16" r="3" />
+    </svg>
+  );
+}
+
+function IconSnap({ active }: { active: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`w-5 h-5 ${active ? "text-gray-900" : "text-gray-400"}`}
+    >
+      <polygon points="12,2 22,20 2,20" />
+      <line x1="12" y1="20" x2="12" y2="10" />
+      <line x1="12" y1="13" x2="16" y2="11" />
+    </svg>
+  );
+}
+
+function IconSliders() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      className="w-5 h-5 text-gray-600"
+    >
+      <line x1="4" y1="6" x2="20" y2="6" />
+      <line x1="4" y1="12" x2="20" y2="12" />
+      <line x1="4" y1="18" x2="20" y2="18" />
+      <circle cx="9" cy="6" r="2.5" fill="white" stroke="currentColor" />
+      <circle cx="15" cy="12" r="2.5" fill="white" stroke="currentColor" />
+      <circle cx="9" cy="18" r="2.5" fill="white" stroke="currentColor" />
+    </svg>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export default function EMDRApp() {
+  // Three speed presets; active one is used for playback
+  const [speeds, setSpeeds] = useState<Speeds>([...DEFAULT_SPEEDS]);
+  const [activeSpeedIdx, setActiveSpeedIdx] = useState(1); // slot 2 (1.5 Hz) active by default
+
+  // Two repeat-count presets; active one is used for playback (null = infinite)
+  const [repeatCounts, setRepeatCounts] = useState<RepeatCounts>([...DEFAULT_REPEAT_COUNTS]);
+  const [activeRepeatIdx, setActiveRepeatIdx] = useState(0); // slot 1 (35) active by default
+
+  const [soundMode, setSoundMode] = useState<SoundMode>("beep");
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [repeatCount, setRepeatCount] = useState(0);
+  const [showAdjustments, setShowAdjustments] = useState(false);
+
+  // DOM refs
+  const ballRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Animation refs — always hold the latest values so the rAF loop never stales
+  const phaseRef = useRef(0);
+  const lastTsRef = useRef<number | null>(null);
+  const repeatCountRef = useRef(0);
+  const animFrameRef = useRef<number | null>(null);
+  const isPlayingRef = useRef(false);
+  const hzRef = useRef(speeds[activeSpeedIdx]);
+  const repeatsRef = useRef(repeatCounts[activeRepeatIdx]);
+  const soundModeRef = useRef(soundMode);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  // Keep animation refs in sync with state
+  useEffect(() => {
+    hzRef.current = speeds[activeSpeedIdx];
+  }, [speeds, activeSpeedIdx]);
+
+  useEffect(() => {
+    repeatsRef.current = repeatCounts[activeRepeatIdx];
+  }, [repeatCounts, activeRepeatIdx]);
+
+  useEffect(() => {
+    soundModeRef.current = soundMode;
+  }, [soundMode]);
+
+  // ─── Audio ──────────────────────────────────────────────────────────────
+
+  function getAudioCtx(): AudioContext {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext ||
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).webkitAudioContext)();
+    }
+    if (audioCtxRef.current.state === "suspended") {
+      audioCtxRef.current.resume();
+    }
+    return audioCtxRef.current;
+  }
+
+  function triggerSound() {
+    if (soundModeRef.current === "muted") return;
+    try {
+      const ctx = getAudioCtx();
+      if (soundModeRef.current === "beep") playBeep(ctx);
+      else playSnap(ctx);
+    } catch {
+      /* AudioContext not available */
+    }
+  }
+
+  // ─── Ball rendering ──────────────────────────────────────────────────────
+
+  function renderBall(phase: number) {
+    const ball = ballRef.current;
+    const container = containerRef.current;
+    if (!ball || !container) return;
+    const phaseMod = ((phase % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    const normPos = (1 - Math.cos(phaseMod)) / 2; // 0 = left, 1 = right
+    const travelWidth = container.offsetWidth - ball.offsetWidth;
+    ball.style.left = `${normPos * travelWidth}px`;
+    // Scale + shadow bloom peaks at center (max velocity), fades at edges
+    const vel = Math.abs(Math.sin(phaseMod));
+    ball.style.transform = `translateY(-50%) scale(${1 + vel * 0.045})`;
+    ball.style.boxShadow = `0 ${4 + vel * 10}px ${8 + vel * 20}px rgba(0,0,0,${0.12 + vel * 0.1})`;
+  }
+
+  // ─── Animation loop ──────────────────────────────────────────────────────
+
+  const animateRef = useRef<((ts: number) => void) | undefined>(undefined);
+  animateRef.current = (timestamp: number) => {
+    if (!isPlayingRef.current) return;
+    if (lastTsRef.current === null) lastTsRef.current = timestamp;
+    const dt = Math.min((timestamp - lastTsRef.current) / 1000, 0.1);
+    lastTsRef.current = timestamp;
+
+    const TWO_PI = 2 * Math.PI;
+    const prevPhase = phaseRef.current;
+    const nextPhase = prevPhase + TWO_PI * hzRef.current * dt;
+    const prevCycles = Math.floor(prevPhase / TWO_PI);
+    const nextCycles = Math.floor(nextPhase / TWO_PI);
+
+    // Sound at right edge (phase crosses n·2π + π)
+    for (let c = prevCycles; c <= nextCycles; c++) {
+      const rightX = c * TWO_PI + Math.PI;
+      if (prevPhase < rightX && nextPhase >= rightX) triggerSound();
+    }
+
+    // Sound + repeat count at left edge (full cycle completed)
+    if (nextCycles > prevCycles) {
+      for (let i = 0; i < nextCycles - prevCycles; i++) {
+        repeatCountRef.current++;
+        setRepeatCount(repeatCountRef.current);
+        const max = repeatsRef.current;
+        if (max !== null && repeatCountRef.current >= max) {
+          phaseRef.current = 0;
+          renderBall(0);
+          isPlayingRef.current = false;
+          setIsPlaying(false);
+          lastTsRef.current = null;
+          repeatCountRef.current = 0;
+          setRepeatCount(0);
+          return;
+        }
+        triggerSound();
+      }
+    }
+
+    phaseRef.current = nextPhase;
+    renderBall(nextPhase);
+    animFrameRef.current = requestAnimationFrame((ts) => animateRef.current!(ts));
+  };
+
+  // ─── Play / stop ─────────────────────────────────────────────────────────
+
+  function startAnimation() {
+    isPlayingRef.current = true;
+    phaseRef.current = 0;
+    lastTsRef.current = null;
+    repeatCountRef.current = 0;
+    setRepeatCount(0);
+    renderBall(0);
+    animFrameRef.current = requestAnimationFrame((ts) => animateRef.current!(ts));
+  }
+
+  function stopAnimation() {
+    isPlayingRef.current = false;
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    phaseRef.current = 0;
+    lastTsRef.current = null;
+    repeatCountRef.current = 0;
+    setRepeatCount(0);
+    renderBall(0);
+  }
+
+  function togglePlay() {
+    if (isPlayingRef.current) {
+      stopAnimation();
+      setIsPlaying(false);
+    } else {
+      setIsPlaying(true);
+      startAnimation();
+    }
+  }
+
+  useEffect(() => {
+    renderBall(0);
+    return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ─── Settings handlers ────────────────────────────────────────────────────
+
+  function handleSpeedsChange(next: Speeds) {
+    setSpeeds(next);
+    hzRef.current = next[activeSpeedIdx];
+  }
+
+  function handleRepeatCountsChange(next: RepeatCounts) {
+    setRepeatCounts(next);
+    repeatsRef.current = next[activeRepeatIdx];
+  }
+
+  function cycleSpeedSlot() {
+    const next = (activeSpeedIdx + 1) % 3;
+    setActiveSpeedIdx(next);
+    hzRef.current = speeds[next];
+  }
+
+  function cycleRepeatSlot() {
+    const next = (activeRepeatIdx + 1) % 2;
+    setActiveRepeatIdx(next);
+    repeatsRef.current = repeatCounts[next];
+  }
+
+  // ─── Render ───────────────────────────────────────────────────────────────
+
+  const activeRepeat = repeatCounts[activeRepeatIdx];
+
+  return (
+    <div className="flex flex-col h-full bg-white select-none overflow-hidden">
+      {/* ── Ball arena ── */}
+      <div
+        ref={containerRef}
+        className="flex-1 relative"
+        onClick={togglePlay}
+        style={{ cursor: "pointer" }}
+      >
+        <div
+          ref={ballRef}
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "0px",
+            width: "80px",
+            height: "80px",
+            borderRadius: "50%",
+            background: "#111111",
+            transform: "translateY(-50%)",
+            willChange: "left, transform, box-shadow",
+          }}
+        />
+
+        {!isPlaying && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <button
+              className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center shadow-sm pointer-events-auto"
+              onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+            >
+              <IconPlay />
+            </button>
+          </div>
+        )}
+
+        {isPlaying && activeRepeat !== null && (
+          <div className="absolute bottom-4 right-4 text-sm text-gray-300 font-mono tabular-nums">
+            {repeatCount} / {activeRepeat}
+          </div>
+        )}
+      </div>
+
+      {/* ── Control bar ── */}
+      <div
+        className={`border-t border-gray-100 bg-white transition-opacity duration-500 ${
+          isPlaying ? "opacity-20 pointer-events-none" : "opacity-100"
+        }`}
+      >
+        <div className="flex items-end justify-between px-4 py-3">
+          {/* Speed pill — tap to cycle active slot */}
+          <div className="flex flex-col items-center gap-1">
+            <button
+              className="bg-gray-100 rounded-full px-3 py-1.5 flex items-center gap-1"
+              onClick={cycleSpeedSlot}
+            >
+              {speeds.map((s, i) => (
+                <span
+                  key={i}
+                  className={`text-[12px] font-semibold tabular-nums transition-colors ${
+                    i === activeSpeedIdx ? "text-gray-900" : "text-gray-400"
+                  }`}
+                >
+                  {i > 0 && (
+                    <span className="text-gray-300 font-normal mx-0.5">|</span>
+                  )}
+                  {s.toFixed(1)}
+                </span>
+              ))}
+            </button>
+            <span className="text-[11px] text-gray-400">Speed (Hz)</span>
+          </div>
+
+          {/* Repeats pill — tap to cycle active slot */}
+          <div className="flex flex-col items-center gap-1">
+            <button
+              className="bg-gray-100 rounded-full px-3 py-1.5 flex items-center gap-1"
+              onClick={cycleRepeatSlot}
+            >
+              {repeatCounts.map((r, i) => (
+                <span
+                  key={i}
+                  className={`text-[12px] font-semibold tabular-nums transition-colors ${
+                    i === activeRepeatIdx ? "text-gray-900" : "text-gray-400"
+                  }`}
+                >
+                  {i > 0 && (
+                    <span className="text-gray-300 font-normal mx-0.5">|</span>
+                  )}
+                  {r !== null ? r : "∞"}
+                </span>
+              ))}
+            </button>
+            <span className="text-[11px] text-gray-400">Repeats</span>
+          </div>
+
+          {/* Sound mode */}
+          <div className="flex flex-col items-center gap-1">
+            <div className="flex items-center gap-1 bg-gray-100 rounded-full px-3 py-1.5">
+              <button className="p-0.5" onClick={() => setSoundMode("muted")}>
+                <IconMute active={soundMode === "muted"} />
+              </button>
+              <button className="p-0.5" onClick={() => setSoundMode("beep")}>
+                <IconBeep active={soundMode === "beep"} />
+              </button>
+              <button className="p-0.5" onClick={() => setSoundMode("snap")}>
+                <IconSnap active={soundMode === "snap"} />
+              </button>
+            </div>
+            <span className="text-[11px] text-gray-400">Sound</span>
+          </div>
+
+          {/* Adjustments */}
+          <div className="flex flex-col items-center gap-1">
+            <button
+              className="bg-gray-100 rounded-full p-2"
+              onClick={() => setShowAdjustments(true)}
+            >
+              <IconSliders />
+            </button>
+            <span className="text-[11px] text-gray-400">Adjustments</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Adjustments panel ── */}
+      {showAdjustments && (
+        <AdjustmentsPanel
+          speeds={speeds}
+          activeSpeedIdx={activeSpeedIdx}
+          repeatCounts={repeatCounts}
+          activeRepeatIdx={activeRepeatIdx}
+          onSpeedsChange={handleSpeedsChange}
+          onRepeatCountsChange={handleRepeatCountsChange}
+          onClose={() => setShowAdjustments(false)}
+        />
+      )}
+    </div>
+  );
+}
