@@ -3,6 +3,14 @@
 import { useState, useRef, useEffect } from "react";
 import type { Speeds, RepeatCounts } from "./EMDRApp";
 
+type BgAppearance = "auto" | "light" | "dark";
+
+const PALETTE = [
+  "#111111", "#ffffff", "#9ca3af", "#000000",
+  "#3b82f6", "#a855f7", "#ec4899", "#ef4444",
+  "#f97316", "#eab308", "#22c55e",
+];
+
 interface Props {
   speeds: Speeds;
   activeSpeedIdx: number;
@@ -10,6 +18,12 @@ interface Props {
   activeRepeatIdx: number;
   onSpeedsChange: (s: Speeds) => void;
   onRepeatCountsChange: (r: RepeatCounts) => void;
+  circleColor: string | null;
+  bgAppearance: BgAppearance;
+  bgColor: string | null;
+  onCircleColorChange: (c: string | null) => void;
+  onBgAppearanceChange: (a: BgAppearance) => void;
+  onBgColorChange: (c: string | null) => void;
   onClose: () => void;
 }
 
@@ -27,8 +41,15 @@ export default function AdjustmentsPanel({
   activeRepeatIdx,
   onSpeedsChange,
   onRepeatCountsChange,
+  circleColor,
+  bgAppearance,
+  bgColor,
+  onCircleColorChange,
+  onBgAppearanceChange,
+  onBgColorChange,
   onClose,
 }: Props) {
+  const [colorsOpen, setColorsOpen] = useState(true);
   const [speedOpen, setSpeedOpen] = useState(false);
   const [repeatsOpen, setRepeatsOpen] = useState(false);
   const [dragY, setDragY] = useState(0);
@@ -150,6 +171,116 @@ export default function AdjustmentsPanel({
           <h2 className="absolute inset-x-0 text-center text-base font-semibold pointer-events-none">
             Adjustments
           </h2>
+        </div>
+
+        <p className="px-5 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+          Colors
+        </p>
+
+        <div className="px-5 mb-4 space-y-2">
+          {/* ── Colors card ── */}
+          <div className="bg-white rounded-2xl overflow-hidden">
+            <button
+              className="w-full flex items-center justify-between px-4 py-4"
+              onClick={() => setColorsOpen((v) => !v)}
+            >
+              <div className="flex items-center gap-3">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-gray-600">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 2a10 10 0 0 1 0 20" fill="currentColor" fillOpacity="0.15" />
+                  <circle cx="12" cy="12" r="3" fill="currentColor" />
+                </svg>
+                <span className="font-medium text-gray-900">Colors</span>
+              </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${colorsOpen ? "rotate-180" : ""}`}>
+                <polyline points="6,9 12,15 18,9" />
+              </svg>
+            </button>
+
+            {colorsOpen && (
+              <div className="border-t border-gray-100 px-4 pt-4 pb-5 space-y-5">
+                {/* Circle color */}
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-3">Circle</p>
+                  <div className="flex flex-wrap gap-2.5">
+                    {/* Auto chip */}
+                    <button
+                      onClick={() => onCircleColorChange(null)}
+                      className={`w-9 h-9 rounded-full transition-transform overflow-hidden ${
+                        circleColor === null
+                          ? "ring-2 ring-offset-2 ring-blue-500 scale-110"
+                          : "ring-1 ring-gray-200"
+                      }`}
+                    >
+                      <div className="w-full h-full" style={{ background: "linear-gradient(135deg, #111 50%, #fff 50%)" }} />
+                    </button>
+                    {PALETTE.map((color) => (
+                      <button
+                        key={color}
+                        onClick={() => onCircleColorChange(color)}
+                        style={{ background: color }}
+                        className={`w-9 h-9 rounded-full transition-transform ${
+                          circleColor === color
+                            ? "ring-2 ring-offset-2 ring-blue-500 scale-110"
+                            : "ring-1 ring-gray-200"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Background color */}
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-3">Background</p>
+                  <div className="flex flex-wrap gap-2.5">
+                    {/* Auto chip */}
+                    <button
+                      onClick={() => onBgColorChange(null)}
+                      className={`w-9 h-9 rounded-full transition-transform overflow-hidden ${
+                        bgColor === null
+                          ? "ring-2 ring-offset-2 ring-blue-500 scale-110"
+                          : "ring-1 ring-gray-200"
+                      }`}
+                    >
+                      <div className="w-full h-full" style={{ background: "linear-gradient(135deg, #111 50%, #fff 50%)" }} />
+                    </button>
+                    {PALETTE.map((color) => (
+                      <button
+                        key={color}
+                        onClick={() => onBgColorChange(color)}
+                        style={{ background: color }}
+                        className={`w-9 h-9 rounded-full transition-transform ${
+                          bgColor === color
+                            ? "ring-2 ring-offset-2 ring-blue-500 scale-110"
+                            : "ring-1 ring-gray-200"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Appearance */}
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-3">Appearance</p>
+                  <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+                    {(["auto", "light", "dark"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => { onBgAppearanceChange(mode); onBgColorChange(null); }}
+                        className={`flex-1 py-1.5 rounded-lg text-sm font-medium transition-colors capitalize ${
+                          bgColor === null && bgAppearance === mode
+                            ? "bg-white text-gray-900 shadow-sm"
+                            : "text-gray-500"
+                        }`}
+                      >
+                        {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <p className="px-5 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">

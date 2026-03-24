@@ -10,12 +10,17 @@ export type RepeatCounts = [number | null, number | null];
 const DEFAULT_SPEEDS: Speeds = [0.5, 1.5, 0.5];
 const DEFAULT_REPEAT_COUNTS: RepeatCounts = [35, 70];
 
+type BgAppearance = "auto" | "light" | "dark";
+
 type Settings = {
   speeds: Speeds;
   activeSpeedIdx: number;
   repeatCounts: RepeatCounts;
   activeRepeatIdx: number;
   soundMode: SoundMode;
+  circleColor: string | null;
+  bgAppearance: BgAppearance;
+  bgColor: string | null;
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -24,6 +29,9 @@ const DEFAULT_SETTINGS: Settings = {
   repeatCounts: [...DEFAULT_REPEAT_COUNTS],
   activeRepeatIdx: 0,
   soundMode: "beep",
+  circleColor: null,
+  bgAppearance: "auto",
+  bgColor: null,
 };
 
 const STORAGE_KEY = "emdr_settings";
@@ -163,12 +171,22 @@ function IconSliders() {
   );
 }
 
+function isBgDark(hex: string): boolean {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return (r * 299 + g * 587 + b * 114) / 1000 < 128;
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function EMDRApp() {
   const [settings, setSettings] = useState<Settings>(() => loadSettings() ?? DEFAULT_SETTINGS);
-  const { speeds, activeSpeedIdx, repeatCounts, activeRepeatIdx, soundMode } = settings;
+  const { speeds, activeSpeedIdx, repeatCounts, activeRepeatIdx, soundMode, circleColor, bgAppearance, bgColor } = settings;
   const [isPlaying, setIsPlaying] = useState(false);
+  const [systemDark, setSystemDark] = useState(() =>
+    window.matchMedia("(prefers-color-scheme: dark)").matches
+  );
   const [repeatCount, setRepeatCount] = useState(0);
   const [showAdjustments, setShowAdjustments] = useState(false);
 
@@ -201,6 +219,14 @@ export default function EMDRApp() {
   useEffect(() => {
     soundModeRef.current = soundMode;
   }, [soundMode]);
+
+  // Track system dark mode for "auto" background appearance
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   // Persist user preferences to localStorage
   useEffect(() => {
@@ -394,6 +420,20 @@ export default function EMDRApp() {
     };
   }, []);
 
+  // ─── Color handlers ───────────────────────────────────────────────────────
+
+  function handleCircleColorChange(c: string | null) {
+    setSettings(s => ({ ...s, circleColor: c }));
+  }
+
+  function handleBgAppearanceChange(a: BgAppearance) {
+    setSettings(s => ({ ...s, bgAppearance: a }));
+  }
+
+  function handleBgColorChange(c: string | null) {
+    setSettings(s => ({ ...s, bgColor: c }));
+  }
+
   // ─── Settings handlers ────────────────────────────────────────────────────
 
   function handleSpeedsChange(next: Speeds) {
@@ -416,8 +456,17 @@ export default function EMDRApp() {
 
   const activeRepeat = repeatCounts[activeRepeatIdx];
 
+  const resolvedBg =
+    bgColor !== null      ? bgColor
+    : bgAppearance === "dark"  ? "#111111"
+    : bgAppearance === "light" ? "#ffffff"
+    : systemDark               ? "#111111"
+    : "#ffffff";
+
+  const resolvedCircleColor = circleColor ?? (isBgDark(resolvedBg) ? "#ffffff" : "#111111");
+
   return (
-    <div className="flex flex-col h-full bg-white overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden" style={{ background: resolvedBg }}>
       {/* ── Ball arena ── */}
       <div
         ref={containerRef}
@@ -434,7 +483,7 @@ export default function EMDRApp() {
             width: "clamp(52px, 9vh, 80px)",
             height: "clamp(52px, 9vh, 80px)",
             borderRadius: "50%",
-            background: "#111111",
+            background: resolvedCircleColor,
             transform: "translateY(-50%)",
             willChange: "left, transform, box-shadow",
           }}
@@ -549,6 +598,12 @@ export default function EMDRApp() {
           activeRepeatIdx={activeRepeatIdx}
           onSpeedsChange={handleSpeedsChange}
           onRepeatCountsChange={handleRepeatCountsChange}
+          circleColor={circleColor}
+          bgAppearance={bgAppearance}
+          bgColor={bgColor}
+          onCircleColorChange={handleCircleColorChange}
+          onBgAppearanceChange={handleBgAppearanceChange}
+          onBgColorChange={handleBgColorChange}
           onClose={() => setShowAdjustments(false)}
         />
       )}
