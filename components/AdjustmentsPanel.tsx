@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { Speeds, RepeatCounts } from "./EMDRApp";
 
 interface Props {
@@ -13,7 +13,7 @@ interface Props {
   onClose: () => void;
 }
 
-const DEFAULT_SPEEDS: Speeds = [0.5, 1.5, 0.5];
+const DEFAULT_SPEEDS: Speeds = [0.5, 1.5, 2.0];
 const DEFAULT_REPEATS: RepeatCounts = [35, 70];
 
 function fmt(n: number) {
@@ -31,6 +31,44 @@ export default function AdjustmentsPanel({
 }: Props) {
   const [speedOpen, setSpeedOpen] = useState(false);
   const [repeatsOpen, setRepeatsOpen] = useState(false);
+  const [dragY, setDragY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartYRef = useRef(0);
+
+  function startDrag(clientY: number) {
+    dragStartYRef.current = clientY;
+    setIsDragging(true);
+  }
+
+  function moveDrag(clientY: number) {
+    setDragY(Math.max(0, clientY - dragStartYRef.current));
+  }
+
+  useEffect(() => {
+    if (!isDragging) return;
+    const onMouseMove = (e: MouseEvent) => moveDrag(e.clientY);
+    const onMouseUp = (e: MouseEvent) => {
+      setIsDragging(false);
+      if (e.clientY - dragStartYRef.current > 80) onClose(); else setDragY(0);
+    };
+    // { passive: false } lets us call preventDefault() to block pull-to-refresh
+    const onTouchMove = (e: TouchEvent) => { e.preventDefault(); moveDrag(e.touches[0].clientY); };
+    const onTouchEnd = (e: TouchEvent) => {
+      setIsDragging(false);
+      const cy = e.changedTouches[0].clientY;
+      if (cy - dragStartYRef.current > 80) onClose(); else setDragY(0);
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [isDragging, onClose]);
 
   // Local string state for the two repeat inputs so the user can type freely
   const [repeatInputs, setRepeatInputs] = useState<[string, string]>([
@@ -75,9 +113,19 @@ export default function AdjustmentsPanel({
       <div className="absolute inset-0 bg-black/20" onClick={onClose} />
 
       {/* Sheet */}
-      <div className="relative bg-gray-100 rounded-t-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
-        {/* Drag handle — tap to close */}
-        <div className="flex justify-center pt-3 pb-1 cursor-pointer" onClick={onClose}>
+      <div
+        className="relative bg-gray-100 rounded-t-3xl max-h-[90vh] overflow-y-auto shadow-2xl"
+        style={{
+          transform: `translateY(${dragY}px)`,
+          transition: isDragging ? "none" : "transform 0.2s ease",
+        }}
+      >
+        {/* Drag handle — drag or swipe down to close */}
+        <div
+          className="flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing"
+          onMouseDown={(e) => startDrag(e.clientY)}
+          onTouchStart={(e) => startDrag(e.touches[0].clientY)}
+        >
           <div className="w-10 h-1 rounded-full bg-gray-300" />
         </div>
 
