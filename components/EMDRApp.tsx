@@ -13,7 +13,7 @@ const DEFAULT_REPEAT_COUNTS: RepeatCounts = [35, 70];
 // ─── Audio synthesis ────────────────────────────────────────────────────────
 
 // Short clock-like tick — the metronome icon sound
-function playBeep(ctx: AudioContext) {
+function playBeep(ctx: AudioContext, dest: AudioNode) {
   const t = ctx.currentTime;
   // Very short high-frequency impulse, like a clock or mechanical metronome tick
   const osc = ctx.createOscillator();
@@ -23,17 +23,17 @@ function playBeep(ctx: AudioContext) {
   gain.gain.setValueAtTime(0.9, t);
   gain.gain.exponentialRampToValueAtTime(0.001, t + 0.012);
   osc.connect(gain);
-  gain.connect(ctx.destination);
+  gain.connect(dest);
   osc.start(t);
   osc.stop(t + 0.015);
 }
 
 // Sustained 440 Hz tone — the wave icon sound
-function playSnap(ctx: AudioContext) {
+function playSnap(ctx: AudioContext, dest: AudioNode) {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.connect(gain);
-  gain.connect(ctx.destination);
+  gain.connect(dest);
   osc.type = "sine";
   osc.frequency.value = 440; // A4
   const t = ctx.currentTime;
@@ -165,6 +165,8 @@ export default function EMDRApp() {
   const repeatsRef = useRef(repeatCounts[activeRepeatIdx]);
   const soundModeRef = useRef(soundMode);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const audioDestRef = useRef<AudioNode | null>(null);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
 
   // Keep animation refs in sync with state
   useEffect(() => {
@@ -186,6 +188,29 @@ export default function EMDRApp() {
       audioCtxRef.current = new (window.AudioContext ||
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any).webkitAudioContext)();
+      // Route all Web Audio through a MediaStreamDestination → DOM <audio> element.
+      // iOS then treats it as media playback (same category as YouTube/Spotify),
+      // bypassing the hardware silent switch as long as the volume is up.
+      try {
+        const streamDest = audioCtxRef.current.createMediaStreamDestination();
+        // Silent oscillator keeps stream active → <audio> stays playing →
+        // iOS holds AVAudioSessionCategoryPlayback (bypasses silent switch).
+        const silentOsc = audioCtxRef.current.createOscillator();
+        const silentGain = audioCtxRef.current.createGain();
+        silentGain.gain.value = 0;
+        silentOsc.connect(silentGain);
+        silentGain.connect(streamDest);
+        silentOsc.start();
+        const el = document.createElement("audio");
+        el.setAttribute("playsinline", "");
+        el.srcObject = streamDest.stream;
+        document.body.appendChild(el);
+        audioElRef.current = el;
+        // Beeps go to ctx.destination — clean path, no iOS stream processing
+        audioDestRef.current = audioCtxRef.current.destination;
+      } catch {
+        audioDestRef.current = audioCtxRef.current.destination;
+      }
     }
     if (audioCtxRef.current.state === "suspended") {
       audioCtxRef.current.resume();
@@ -193,12 +218,25 @@ export default function EMDRApp() {
     return audioCtxRef.current;
   }
 
+  function getAudioDest(): AudioNode {
+    return audioDestRef.current ?? getAudioCtx().destination;
+  }
+
+  async function unlockAudio(): Promise<void> {
+    const ctx = getAudioCtx();
+    // el.play() must be called synchronously before any await to stay within
+    // the iOS user gesture window — this upgrades the audio session category.
+    if (audioElRef.current) audioElRef.current.play().catch(() => {});
+    await ctx.resume(); // wait until context is confirmed "running"
+  }
+
   function triggerSound() {
     if (soundModeRef.current === "muted") return;
     try {
       const ctx = getAudioCtx();
-      if (soundModeRef.current === "beep") playBeep(ctx);
-      else playSnap(ctx);
+      const dest = getAudioDest();
+      if (soundModeRef.current === "beep") playBeep(ctx, dest);
+      else playSnap(ctx, dest);
     } catch {
       /* AudioContext not available */
     }
@@ -206,13 +244,16 @@ export default function EMDRApp() {
 
   function previewSound(mode: SoundMode) {
     if (mode === "muted") return;
-    try {
-      const ctx = getAudioCtx();
-      if (mode === "beep") playBeep(ctx);
-      else playSnap(ctx);
-    } catch {
-      /* AudioContext not available */
-    }
+    unlockAudio().then(() => {
+      try {
+        const ctx = getAudioCtx();
+        const dest = getAudioDest();
+        if (mode === "beep") playBeep(ctx, dest);
+        else playSnap(ctx, dest);
+      } catch {
+        /* AudioContext not available */
+      }
+    });
   }
 
   // ─── Ball rendering ──────────────────────────────────────────────────────
@@ -309,16 +350,10 @@ export default function EMDRApp() {
       stopAnimation();
       setIsPlaying(false);
     } else {
-      // iOS Safari requires a source node to be started within a user gesture to unlock audio.
-      // Play a silent buffer immediately so the AudioContext is fully unlocked before rAF fires.
-      const ctx = getAudioCtx();
-      const buf = ctx.createBuffer(1, 1, ctx.sampleRate);
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      src.connect(ctx.destination);
-      src.start(0);
-      setIsPlaying(true);
-      startAnimation();
+      setIsPlaying(true); // update UI immediately
+      // Start animation only after AudioContext is confirmed running — prevents
+      // oscillators queuing up while suspended and firing all at once (distortion).
+      unlockAudio().then(() => startAnimation());
     }
   }
 
@@ -326,6 +361,10 @@ export default function EMDRApp() {
     renderBall(0);
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (audioElRef.current) {
+        audioElRef.current.pause();
+        audioElRef.current.remove();
+      }
     };
   }, []);
 
@@ -339,12 +378,6 @@ export default function EMDRApp() {
   function handleRepeatCountsChange(next: RepeatCounts) {
     setRepeatCounts(next);
     repeatsRef.current = next[activeRepeatIdx];
-  }
-
-  function cycleSpeedSlot() {
-    const next = (activeSpeedIdx + 1) % 3;
-    setActiveSpeedIdx(next);
-    hzRef.current = speeds[next];
   }
 
   function cycleRepeatSlot() {
@@ -372,8 +405,8 @@ export default function EMDRApp() {
             position: "absolute",
             top: "50%",
             left: "0px",
-            width: "80px",
-            height: "80px",
+            width: "clamp(52px, 9vh, 80px)",
+            height: "clamp(52px, 9vh, 80px)",
             borderRadius: "50%",
             background: "#111111",
             transform: "translateY(-50%)",
@@ -407,26 +440,25 @@ export default function EMDRApp() {
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div className="flex items-end justify-between px-4 py-3">
-          {/* Speed pill — tap to cycle active slot */}
+          {/* Speed pill — tap individual value to select */}
           <div className="flex flex-col items-center gap-1">
-            <button
-              className="bg-gray-100 rounded-full px-3 py-1.5 flex items-center gap-1"
-              onClick={cycleSpeedSlot}
-            >
+            <div className="bg-gray-100 rounded-full px-3 py-1.5 flex items-center gap-1">
               {speeds.map((s, i) => (
-                <span
-                  key={i}
-                  className={`text-[12px] font-semibold tabular-nums transition-colors ${
-                    i === activeSpeedIdx ? "text-gray-900" : "text-gray-400"
-                  }`}
-                >
+                <span key={i} className="flex items-center">
                   {i > 0 && (
                     <span className="text-gray-300 font-normal mx-0.5">|</span>
                   )}
-                  {s.toFixed(1)}
+                  <button
+                    className={`text-[12px] font-semibold tabular-nums transition-colors px-0.5 ${
+                      i === activeSpeedIdx ? "text-gray-900" : "text-gray-400"
+                    }`}
+                    onClick={() => { setActiveSpeedIdx(i); hzRef.current = speeds[i]; }}
+                  >
+                    {s.toFixed(1)}
+                  </button>
                 </span>
               ))}
-            </button>
+            </div>
             <span className="text-[11px] text-gray-400">Speed (Hz)</span>
           </div>
 
