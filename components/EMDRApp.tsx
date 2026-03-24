@@ -10,6 +10,34 @@ export type RepeatCounts = [number | null, number | null];
 const DEFAULT_SPEEDS: Speeds = [0.5, 1.5, 0.5];
 const DEFAULT_REPEAT_COUNTS: RepeatCounts = [35, 70];
 
+type Settings = {
+  speeds: Speeds;
+  activeSpeedIdx: number;
+  repeatCounts: RepeatCounts;
+  activeRepeatIdx: number;
+  soundMode: SoundMode;
+};
+
+const DEFAULT_SETTINGS: Settings = {
+  speeds: [...DEFAULT_SPEEDS],
+  activeSpeedIdx: 1,
+  repeatCounts: [...DEFAULT_REPEAT_COUNTS],
+  activeRepeatIdx: 0,
+  soundMode: "beep",
+};
+
+const STORAGE_KEY = "emdr_settings";
+
+function loadSettings(): Settings | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as Settings;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Audio synthesis ────────────────────────────────────────────────────────
 
 // Short clock-like tick — the metronome icon sound
@@ -138,15 +166,8 @@ function IconSliders() {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function EMDRApp() {
-  // Three speed presets; active one is used for playback
-  const [speeds, setSpeeds] = useState<Speeds>([...DEFAULT_SPEEDS]);
-  const [activeSpeedIdx, setActiveSpeedIdx] = useState(1); // slot 2 (1.5 Hz) active by default
-
-  // Two repeat-count presets; active one is used for playback (null = infinite)
-  const [repeatCounts, setRepeatCounts] = useState<RepeatCounts>([...DEFAULT_REPEAT_COUNTS]);
-  const [activeRepeatIdx, setActiveRepeatIdx] = useState(0); // slot 1 (35) active by default
-
-  const [soundMode, setSoundMode] = useState<SoundMode>("beep");
+  const [settings, setSettings] = useState<Settings>(() => loadSettings() ?? DEFAULT_SETTINGS);
+  const { speeds, activeSpeedIdx, repeatCounts, activeRepeatIdx, soundMode } = settings;
   const [isPlaying, setIsPlaying] = useState(false);
   const [repeatCount, setRepeatCount] = useState(0);
   const [showAdjustments, setShowAdjustments] = useState(false);
@@ -180,6 +201,11 @@ export default function EMDRApp() {
   useEffect(() => {
     soundModeRef.current = soundMode;
   }, [soundMode]);
+
+  // Persist user preferences to localStorage
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  }, [settings]);
 
   // ─── Audio ──────────────────────────────────────────────────────────────
 
@@ -371,18 +397,18 @@ export default function EMDRApp() {
   // ─── Settings handlers ────────────────────────────────────────────────────
 
   function handleSpeedsChange(next: Speeds) {
-    setSpeeds(next);
+    setSettings(s => ({ ...s, speeds: next }));
     hzRef.current = next[activeSpeedIdx];
   }
 
   function handleRepeatCountsChange(next: RepeatCounts) {
-    setRepeatCounts(next);
+    setSettings(s => ({ ...s, repeatCounts: next }));
     repeatsRef.current = next[activeRepeatIdx];
   }
 
   function cycleRepeatSlot() {
     const next = (activeRepeatIdx + 1) % 2;
-    setActiveRepeatIdx(next);
+    setSettings(s => ({ ...s, activeRepeatIdx: next }));
     repeatsRef.current = repeatCounts[next];
   }
 
@@ -452,7 +478,7 @@ export default function EMDRApp() {
                     className={`text-[12px] font-semibold tabular-nums transition-colors px-0.5 ${
                       i === activeSpeedIdx ? "text-gray-900" : "text-gray-400"
                     }`}
-                    onClick={() => { setActiveSpeedIdx(i); hzRef.current = speeds[i]; }}
+                    onClick={() => { setSettings(s => ({ ...s, activeSpeedIdx: i })); hzRef.current = speeds[i]; }}
                   >
                     {s.toFixed(1)}
                   </button>
@@ -488,13 +514,13 @@ export default function EMDRApp() {
           {/* Sound mode */}
           <div className="flex flex-col items-center gap-1">
             <div className="flex items-center gap-1 bg-gray-100 rounded-full px-3 py-1.5">
-              <button className="p-0.5" onClick={() => setSoundMode("muted")}>
+              <button className="p-0.5" onClick={() => setSettings(s => ({ ...s, soundMode: "muted" }))}>
                 <IconMute active={soundMode === "muted"} />
               </button>
-              <button className="p-0.5" onClick={() => { setSoundMode("snap"); previewSound("snap"); }}>
+              <button className="p-0.5" onClick={() => { setSettings(s => ({ ...s, soundMode: "snap" })); previewSound("snap"); }}>
                 <IconSnap active={soundMode === "snap"} />
               </button>
-              <button className="p-0.5" onClick={() => { setSoundMode("beep"); previewSound("beep"); }}>
+              <button className="p-0.5" onClick={() => { setSettings(s => ({ ...s, soundMode: "beep" })); previewSound("beep"); }}>
                 <IconBeep active={soundMode === "beep"} />
               </button>
             </div>
