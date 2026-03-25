@@ -4,6 +4,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "EMDR",
   description: "Bilateral stimulation for EMDR therapy",
+  appleWebApp: {
+    title: "EMDR",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export const viewport: Viewport = {

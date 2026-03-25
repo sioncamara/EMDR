@@ -89,7 +89,8 @@ function IconPlay() {
   );
 }
 
-function IconMute({ active }: { active: boolean }) {
+function IconMute({ active, dark = false }: { active: boolean; dark?: boolean }) {
+  const cls = active ? (dark ? "text-white" : "text-gray-900") : (dark ? "text-white/40" : "text-gray-400");
   return (
     <svg
       viewBox="0 0 24 24"
@@ -98,7 +99,7 @@ function IconMute({ active }: { active: boolean }) {
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={`w-5 h-5 ${active ? "text-gray-900" : "text-gray-400"}`}
+      className={`w-5 h-5 ${cls}`}
     >
       <line x1="1" y1="1" x2="23" y2="23" />
       <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
@@ -110,7 +111,8 @@ function IconMute({ active }: { active: boolean }) {
 }
 
 // Metronome body with swung pendulum — represents the "tick" beat
-function IconBeep({ active }: { active: boolean }) {
+function IconBeep({ active, dark = false }: { active: boolean; dark?: boolean }) {
+  const cls = active ? (dark ? "text-white" : "text-gray-900") : (dark ? "text-white/40" : "text-gray-400");
   return (
     <svg
       viewBox="0 0 24 24"
@@ -119,7 +121,7 @@ function IconBeep({ active }: { active: boolean }) {
       strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={`w-5 h-5 ${active ? "text-gray-900" : "text-gray-400"}`}
+      className={`w-5 h-5 ${cls}`}
     >
       {/* Trapezoid body */}
       <path d="M5 21h14L15 4H9L5 21z" />
@@ -134,7 +136,8 @@ function IconBeep({ active }: { active: boolean }) {
 }
 
 // ECG / heartbeat waveform — represents the tone beat
-function IconSnap({ active }: { active: boolean }) {
+function IconSnap({ active, dark = false }: { active: boolean; dark?: boolean }) {
+  const cls = active ? (dark ? "text-white" : "text-gray-900") : (dark ? "text-white/40" : "text-gray-400");
   return (
     <svg
       viewBox="0 0 24 24"
@@ -143,7 +146,7 @@ function IconSnap({ active }: { active: boolean }) {
       strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={`w-5 h-5 ${active ? "text-gray-900" : "text-gray-400"}`}
+      className={`w-5 h-5 ${cls}`}
     >
       {/* flat – P bump – QRS spike – T wave – flat */}
       <polyline points="2,12 6,12 7,10 8,12 10,12 11,3 12,21 13,12 15,9 17,12 22,12" />
@@ -151,7 +154,7 @@ function IconSnap({ active }: { active: boolean }) {
   );
 }
 
-function IconSliders() {
+function IconSliders({ dark = false }: { dark?: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -159,7 +162,7 @@ function IconSliders() {
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
-      className="w-5 h-5 text-gray-600"
+      className={`w-5 h-5 ${dark ? "text-white/70" : "text-gray-600"}`}
     >
       <line x1="4" y1="6" x2="20" y2="6" />
       <line x1="4" y1="12" x2="20" y2="12" />
@@ -464,9 +467,16 @@ export default function EMDRApp() {
     : "#ffffff";
 
   const resolvedCircleColor = circleColor ?? (isBgDark(resolvedBg) ? "#ffffff" : "#111111");
+  const isDark = isBgDark(resolvedBg);
+
+  const activeText = isDark ? "text-white"    : "text-gray-900";
+  const mutedText  = isDark ? "text-white/40" : "text-gray-400";
+  const sepText    = isDark ? "text-white/20" : "text-gray-300";
+  const labelText  = isDark ? "text-white/40" : "text-gray-400";
+  const pillBg     = isDark ? "bg-white/10"   : "bg-gray-100";
 
   return (
-    <div className="flex flex-col h-full overflow-hidden" style={{ background: resolvedBg }}>
+    <div className="flex flex-col h-full overflow-hidden" style={{ background: resolvedBg, paddingTop: "env(safe-area-inset-top)" }}>
       {/* ── Ball arena ── */}
       <div
         ref={containerRef}
@@ -478,7 +488,7 @@ export default function EMDRApp() {
           ref={ballRef}
           style={{
             position: "absolute",
-            top: "50%",
+            top: "57%",
             left: "0px",
             width: "clamp(52px, 9vh, 80px)",
             height: "clamp(52px, 9vh, 80px)",
@@ -492,7 +502,7 @@ export default function EMDRApp() {
         {!isPlaying && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <button
-              className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center shadow-sm pointer-events-auto"
+              className={`w-16 h-16 ${isDark ? "bg-white/15" : "bg-gray-100"} rounded-full flex items-center justify-center shadow-sm pointer-events-auto`}
               onClick={(e) => { e.stopPropagation(); togglePlay(); }}
             >
               <IconPlay />
@@ -501,7 +511,7 @@ export default function EMDRApp() {
         )}
 
         {isPlaying && activeRepeat !== null && (
-          <div className="absolute bottom-4 right-4 text-sm text-gray-300 font-mono tabular-nums">
+          <div className={`absolute bottom-4 right-4 text-sm ${isDark ? "text-white/30" : "text-gray-300"} font-mono tabular-nums`}>
             {repeatCount} / {activeRepeat}
           </div>
         )}
@@ -509,23 +519,23 @@ export default function EMDRApp() {
 
       {/* ── Control bar ── */}
       <div
-        className={`border-t border-gray-100 bg-white transition-opacity duration-500 ${
+        className={`border-t ${isDark ? "border-white/10" : "border-gray-100"} transition-opacity duration-500 ${
           isPlaying ? "opacity-20 pointer-events-none" : "opacity-100"
         }`}
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        style={{ background: resolvedBg, paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        <div className="flex items-end justify-between px-4 py-3">
+        <div className="flex items-end justify-between px-4 py-2">
           {/* Speed pill — tap individual value to select */}
           <div className="flex flex-col items-center gap-1">
-            <div className="bg-gray-100 rounded-full px-3 py-1.5 flex items-center gap-1">
+            <div className={`${pillBg} rounded-full px-3 py-1.5 flex items-center gap-1`}>
               {speeds.map((s, i) => (
                 <span key={i} className="flex items-center">
                   {i > 0 && (
-                    <span className="text-gray-300 font-normal mx-0.5">|</span>
+                    <span className={`${sepText} font-normal mx-0.5`}>|</span>
                   )}
                   <button
                     className={`text-[12px] font-semibold tabular-nums transition-colors px-0.5 ${
-                      i === activeSpeedIdx ? "text-gray-900" : "text-gray-400"
+                      i === activeSpeedIdx ? activeText : mutedText
                     }`}
                     onClick={() => { setSettings(s => ({ ...s, activeSpeedIdx: i })); hzRef.current = speeds[i]; }}
                   >
@@ -534,57 +544,57 @@ export default function EMDRApp() {
                 </span>
               ))}
             </div>
-            <span className="text-[11px] text-gray-400">Speed (Hz)</span>
+            <span className={`text-[11px] ${labelText}`}>Speed (Hz)</span>
           </div>
 
           {/* Repeats pill — tap to cycle active slot */}
           <div className="flex flex-col items-center gap-1">
             <button
-              className="bg-gray-100 rounded-full px-3 py-1.5 flex items-center gap-1"
+              className={`${pillBg} rounded-full px-3 py-1.5 flex items-center gap-1`}
               onClick={cycleRepeatSlot}
             >
               {repeatCounts.map((r, i) => (
                 <span
                   key={i}
                   className={`text-[12px] font-semibold tabular-nums transition-colors ${
-                    i === activeRepeatIdx ? "text-gray-900" : "text-gray-400"
+                    i === activeRepeatIdx ? activeText : mutedText
                   }`}
                 >
                   {i > 0 && (
-                    <span className="text-gray-300 font-normal mx-0.5">|</span>
+                    <span className={`${sepText} font-normal mx-0.5`}>|</span>
                   )}
                   {r !== null ? r : "∞"}
                 </span>
               ))}
             </button>
-            <span className="text-[11px] text-gray-400">Repeats</span>
+            <span className={`text-[11px] ${labelText}`}>Repeats</span>
           </div>
 
           {/* Sound mode */}
           <div className="flex flex-col items-center gap-1">
-            <div className="flex items-center gap-1 bg-gray-100 rounded-full px-3 py-1.5">
+            <div className={`flex items-center gap-1 ${pillBg} rounded-full px-3 py-1.5`}>
               <button className="p-0.5" onClick={() => setSettings(s => ({ ...s, soundMode: "muted" }))}>
-                <IconMute active={soundMode === "muted"} />
+                <IconMute active={soundMode === "muted"} dark={isDark} />
               </button>
               <button className="p-0.5" onClick={() => { setSettings(s => ({ ...s, soundMode: "snap" })); previewSound("snap"); }}>
-                <IconSnap active={soundMode === "snap"} />
+                <IconSnap active={soundMode === "snap"} dark={isDark} />
               </button>
               <button className="p-0.5" onClick={() => { setSettings(s => ({ ...s, soundMode: "beep" })); previewSound("beep"); }}>
-                <IconBeep active={soundMode === "beep"} />
+                <IconBeep active={soundMode === "beep"} dark={isDark} />
               </button>
             </div>
-            <span className="text-[11px] text-gray-400">Sound</span>
+            <span className={`text-[11px] ${labelText}`}>Sound</span>
           </div>
 
           {/* Adjustments */}
           <div className="flex flex-col items-center gap-1">
             <button
-              className="bg-gray-100 rounded-full p-2"
+              className={`${pillBg} rounded-full p-2`}
               onClick={() => setShowAdjustments(true)}
             >
-              <IconSliders />
+              <IconSliders dark={isDark} />
             </button>
-            <span className="text-[11px] text-gray-400">Adjustments</span>
+            <span className={`text-[11px] ${labelText}`}>Adjustments</span>
           </div>
         </div>
       </div>
