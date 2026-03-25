@@ -4,7 +4,13 @@
       "Bash(node -e \"const p = require\\(''/Users/sion/Documents/Formulation/code/EMDR-APP/node_modules/next/package.json''\\); console.log\\(p.version\\)\")",
       "Bash(find /Users/sion/Documents/Formulation/code/EMDR-APP/node_modules/next/dist/client/ -type f -name *.js -o -name *.ts)",
       "Bash(find /Users/sion/Documents/Formulation/code/EMDR-APP/node_modules/next/dist/docs/ -name *viewport* -o -name *mobile* -o -name *ios*)",
-      "Bash(find /Users/sion/Documents/Formulation/code/EMDR-APP/node_modules/next/dist/client/ -name *.js -type f)"
+      "Bash(find /Users/sion/Documents/Formulation/code/EMDR-APP/node_modules/next/dist/client/ -name *.js -type f)",
+      "Bash(find /Users/sion/Documents/Formulation/code/EMDR-APP/app -type f -name *.ts -o -name *.tsx -o -name *.js -o -name *.jsx)",
+      "Bash(grep -r \"NEXT_PUBLIC_\\\\|process\\\\.env\\\\|VERCEL_URL\\\\|VERCEL_ENV\\\\|emdr-xi\\\\|vercel\\\\.app\\\\|NODE_ENV\" /Users/sion/Documents/Formulation/code/EMDR-APP --include=*.ts --include=*.tsx --include=*.js --include=*.jsx --include=*.json)",
+      "Bash(find /Users/sion/Documents/Formulation/code/EMDR-APP/app -type f \\\\\\(-name *.ts -o -name *.tsx \\\\\\))",
+      "Bash(git -C /Users/sion/Documents/Formulation/code/EMDR-APP log --oneline -20)",
+      "Bash(git -C /Users/sion/Documents/Formulation/code/EMDR-APP branch -a)",
+      "Bash(find /Users/sion/Documents/Formulation/code/EMDR-APP -name *.env* -o -name vercel.json -o -name .vercelignore)"
     ]
   }
 }

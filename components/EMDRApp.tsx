@@ -7,7 +7,7 @@ export type SoundMode = "muted" | "beep" | "snap";
 export type Speeds = [number, number, number];
 export type RepeatCounts = [number | null, number | null];
 
-const DEFAULT_SPEEDS: Speeds = [0.5, 1.5, 0.5];
+const DEFAULT_SPEEDS: Speeds = [0.7, 1.5, 2.0];
 const DEFAULT_REPEAT_COUNTS: RepeatCounts = [35, 70];
 
 type BgAppearance = "auto" | "light" | "dark";
