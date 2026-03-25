@@ -28,7 +28,7 @@ const DEFAULT_SETTINGS: Settings = {
   activeSpeedIdx: 1,
   repeatCounts: [...DEFAULT_REPEAT_COUNTS],
   activeRepeatIdx: 0,
-  soundMode: "beep",
+  soundMode: "snap",
   circleColor: null,
   bgAppearance: "auto",
   bgColor: null,
@@ -486,9 +486,9 @@ export default function EMDRApp() {
       >
         <div
           ref={ballRef}
+          className="top-[57%] md:top-1/2"
           style={{
             position: "absolute",
-            top: "57%",
             left: "0px",
             width: "clamp(52px, 9vh, 80px)",
             height: "clamp(52px, 9vh, 80px)",
